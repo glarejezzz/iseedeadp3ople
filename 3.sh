@@ -1,16 +1,21 @@
 #!/bin/bash
 
+# Проверяем, передан ли аргумент (директория)
 if [ -z "$1" ]; then
-    echo "Использование: $0 <директория>"
+    echo "Usage: $0 <directory>"
     exit 1
 fi
 
+# Проверяем, существует ли директория
 if [ ! -d "$1" ]; then
-    echo "Указанная директория не существует."
+    echo "Error: Directory '$1' does not exist"
     exit 1
 fi
 
-find "$1" -type d -exec chmod 755 {} \;   # Права 755 для директорий
-find "$1" -type f -exec chmod 644 {} \;   # Права 644 для файлов
+# Меняем права для директорий на 755
+find "$1" -type d -exec chmod 755 {} +
 
-echo "Права доступа успешно изменены."
+# Меняем права для файлов на 644
+find "$1" -type f -exec chmod 644 {} +
+
+echo "Permissions have been fixed recursively in '$1'"
