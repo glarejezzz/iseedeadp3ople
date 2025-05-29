@@ -1,0 +1,45 @@
+#include "date.h"
+#include <iostream>
+
+int main() {
+    // Current date
+    Date today;
+    std::cout << "Current date: " << today << std::endl;
+    std::cout << "Day of week: " << today.getWeekday() 
+              << " (0-Sunday, 6-Saturday)" << std::endl;
+
+    // Date operations
+    Date future = today + 10;
+    std::cout << "10 days from now: " << future << std::endl;
+
+    Date past = today - 30;
+    std::cout << "30 days ago: " << past << std::endl;
+
+    // Adding months and years
+    Date nextMonth = today;
+    nextMonth.addMonths(1);
+    std::cout << "1 month from now: " << nextMonth << std::endl;
+
+    Date nextYear = today;
+    nextYear.addYears(1);
+    std::cout << "1 year from now: " << nextYear << std::endl;
+
+    // Alumni meeting day
+    Date alumniDay = today.nextAlumniDay();
+    std::cout << "Next alumni meeting day: " << alumniDay << std::endl;
+
+    // Date comparison
+    Date date1(16, 4, 2023);
+    Date date2(20, 3, 2023);
+    std::cout << date1 << " < " << date2 << ": " 
+              << (date1 < date2 ? "true" : "false") << std::endl;
+
+   
+
+    Date inputDate;
+    std::cout << "Enter a date (DD.MM.YYYY): ";
+    std::cin >> inputDate;
+    std::cout << "You entered: " << inputDate << std::endl;
+
+    return 0;
+}
