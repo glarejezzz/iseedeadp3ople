@@ -1,0 +1,224 @@
+#include "market.h"
+#include <cstdlib>
+#include <ctime>
+#include <cmath>
+
+// EconomicAgent implementation
+EconomicAgent::EconomicAgent(const std::string& n, double b) : name(n), budget(b) {}
+
+void EconomicAgent::updateBudget(double delta) {
+    budget += delta;
+}
+
+void EconomicAgent::printInfo() const {
+    std::cout << name << " (Budget: " << budget << ")";
+}
+
+double EconomicAgent::getBudget() const {
+    return budget;
+}
+
+const std::string& EconomicAgent::getName() const {
+    return name;
+}
+
+// Consumer implementation
+Consumer::Consumer(const std::string& n, double b) : EconomicAgent(n, b), satisfaction(0.5) {}
+
+void Consumer::makeDecision() {
+    if (budget > 20) {
+        // Потребитель решает купить товар
+        updateBudget(-20);
+        satisfaction = std::min(1.0, satisfaction + 0.1);
+    } else {
+        satisfaction = std::max(0.0, satisfaction - 0.05);
+    }
+}
+
+void Consumer::printInfo() const {
+    std::cout << "Consumer ";
+    EconomicAgent::printInfo();
+    std::cout << " (Satisfaction: " << satisfaction << ")";
+}
+
+// Company implementation
+Company::Company(const std::string& n, double b) : EconomicAgent(n, b), productionCost(15), profitMargin(0.2) {}
+
+void Company::makeDecision() {
+    // Компания производит товар и продает его
+    double revenue = productionCost * (1 + profitMargin);
+    updateBudget(revenue - productionCost);
+}
+
+void Company::printInfo() const {
+    std::cout << "Company ";
+    EconomicAgent::printInfo();
+    std::cout << " (Prod. cost: " << productionCost << ", Profit: " << profitMargin << ")";
+}
+
+// Government implementation
+Government::Government(const std::string& n, double b) : EconomicAgent(n, b), taxRate(0.1), subsidyRate(0.05) {}
+
+void Government::makeDecision() {
+    // Правительство может изменять налоговые ставки или другие параметры
+}
+
+void Government::applyTax(EconomicAgent* agent) {
+    if (agent != this) {
+        double tax = agent->getBudget() * taxRate;
+        agent->updateBudget(-tax);
+        updateBudget(tax);
+    }
+}
+
+void Government::applySubsidy(EconomicAgent* agent) {
+    if (agent != this) {
+        double subsidy = agent->getBudget() * subsidyRate;
+        updateBudget(-subsidy);
+        agent->updateBudget(subsidy);
+    }
+}
+
+void Government::printInfo() const {
+    std::cout << "Government ";
+    EconomicAgent::printInfo();
+    std::cout << " (Tax rate: " << taxRate << ", Subsidy rate: " << subsidyRate << ")";
+}
+
+// Market implementation
+Market::Market(int initialCapacity) : capacity(initialCapacity), size(0), government(nullptr) {
+    agents = new EconomicAgent*[capacity];
+    srand(time(0));
+}
+
+Market::~Market() {
+    for (int i = 0; i < size; ++i) {
+        delete agents[i];
+    }
+    delete[] agents;
+}
+
+void Market::expandCapacity() {
+    int newCapacity = capacity * 2;
+    EconomicAgent** newAgents = new EconomicAgent*[newCapacity];
+    
+    for (int i = 0; i < size; ++i) {
+        newAgents[i] = agents[i];
+    }
+    
+    delete[] agents;
+    agents = newAgents;
+    capacity = newCapacity;
+}
+
+void Market::addAgent(EconomicAgent* agent) {
+    if (size >= capacity) {
+        expandCapacity();
+    }
+    
+    agents[size++] = agent;
+    
+    // Если добавляется правительство, сохраняем указатель на него
+    Government* gov = dynamic_cast<Government*>(agent);
+    if (gov) {
+        government = gov;
+    }
+}
+
+void Market::swapAgents(int i, int j) {
+    EconomicAgent* temp = agents[i];
+    agents[i] = agents[j];
+    agents[j] = temp;
+}
+
+void Market::simulateInteractions(int rounds) {
+    for (int i = 0; i < rounds; ++i) {
+        // Выбираем случайного потребителя и компанию
+        int consumerIdx = -1, companyIdx = -1;
+        
+        for (int attempts = 0; attempts < 10; ++attempts) {
+            int idx = rand() % size;
+            if (dynamic_cast<Consumer*>(agents[idx])) {
+                consumerIdx = idx;
+                break;
+            }
+        }
+        
+        for (int attempts = 0; attempts < 10; ++attempts) {
+            int idx = rand() % size;
+            if (dynamic_cast<Company*>(agents[idx])) {
+                companyIdx = idx;
+                break;
+            }
+        }
+        
+        // Если нашли и потребителя, и компанию, совершаем сделку
+        if (consumerIdx != -1 && companyIdx != -1) {
+            Consumer* consumer = dynamic_cast<Consumer*>(agents[consumerIdx]);
+            Company* company = dynamic_cast<Company*>(agents[companyIdx]);
+            
+            if (consumer->getBudget() >= 20) {
+                consumer->updateBudget(-20);
+                company->updateBudget(20);
+            }
+        }
+        
+        // Правительство применяет налоги и субсидии
+        if (government && i % 10 == 0) {
+            for (int j = 0; j < size; ++j) {
+                if (agents[j] != government) {
+                    government->applyTax(agents[j]);
+                    government->applySubsidy(agents[j]);
+                }
+            }
+        }
+    }
+}
+
+void Market::sortAgentsByBudget() {
+    for (int i = 0; i < size - 1; ++i) {
+        for (int j = 0; j < size - i - 1; ++j) {
+            if (agents[j]->getBudget() < agents[j + 1]->getBudget()) {
+                swapAgents(j, j + 1);
+            }
+        }
+    }
+}
+
+void Market::printMarketState() const {
+    std::cout << "Market state (" << size << " agents):\n";
+    for (int i = 0; i < size; ++i) {
+        std::cout << i + 1 << ". ";
+        agents[i]->printInfo();
+        std::cout << std::endl;
+    }
+}
+
+// Пример использования
+int main() {
+    Market market;
+    
+    // Добавляем 50 потребителей
+    for (int i = 1; i <= 50; ++i) {
+        market.addAgent(new Consumer("Consumer_" + std::to_string(i), 100 + rand() % 50));
+    }
+    
+    // Добавляем 5 компаний
+    for (int i = 1; i <= 5; ++i) {
+        market.addAgent(new Company("Company_" + std::to_string(i), 500 + rand() % 200));
+    }
+    
+    // Добавляем правительство
+    market.addAgent(new Government("Gov", 1000));
+    
+    // Симулируем 1000 рыночных взаимодействий
+    market.simulateInteractions(1000);
+    
+    // Сортируем агентов по бюджету
+    market.sortAgentsByBudget();
+    
+    // Выводим состояние рынка
+    market.printMarketState();
+    
+    return 0;
+}
