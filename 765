@@ -1,7 +1,8 @@
-#include "market.h"
+#include "123.hpp"
 #include <cstdlib>
 #include <ctime>
 #include <cmath>
+#include <algorithm>
 
 // EconomicAgent implementation
 EconomicAgent::EconomicAgent(const std::string& n, double b) : name(n), budget(b) {}
@@ -27,7 +28,6 @@ Consumer::Consumer(const std::string& n, double b) : EconomicAgent(n, b), satisf
 
 void Consumer::makeDecision() {
     if (budget > 20) {
-        // Потребитель решает купить товар
         updateBudget(-20);
         satisfaction = std::min(1.0, satisfaction + 0.1);
     } else {
@@ -45,7 +45,6 @@ void Consumer::printInfo() const {
 Company::Company(const std::string& n, double b) : EconomicAgent(n, b), productionCost(15), profitMargin(0.2) {}
 
 void Company::makeDecision() {
-    // Компания производит товар и продает его
     double revenue = productionCost * (1 + profitMargin);
     updateBudget(revenue - productionCost);
 }
@@ -60,7 +59,7 @@ void Company::printInfo() const {
 Government::Government(const std::string& n, double b) : EconomicAgent(n, b), taxRate(0.1), subsidyRate(0.05) {}
 
 void Government::makeDecision() {
-    // Правительство может изменять налоговые ставки или другие параметры
+    // Правительство может изменять налоговые ставки
 }
 
 void Government::applyTax(EconomicAgent* agent) {
@@ -118,7 +117,6 @@ void Market::addAgent(EconomicAgent* agent) {
     
     agents[size++] = agent;
     
-    // Если добавляется правительство, сохраняем указатель на него
     Government* gov = dynamic_cast<Government*>(agent);
     if (gov) {
         government = gov;
@@ -152,7 +150,6 @@ void Market::simulateInteractions(int rounds) {
             }
         }
         
-        // Если нашли и потребителя, и компанию, совершаем сделку
         if (consumerIdx != -1 && companyIdx != -1) {
             Consumer* consumer = dynamic_cast<Consumer*>(agents[consumerIdx]);
             Company* company = dynamic_cast<Company*>(agents[companyIdx]);
@@ -163,7 +160,6 @@ void Market::simulateInteractions(int rounds) {
             }
         }
         
-        // Правительство применяет налоги и субсидии
         if (government && i % 10 == 0) {
             for (int j = 0; j < size; ++j) {
                 if (agents[j] != government) {
@@ -176,13 +172,9 @@ void Market::simulateInteractions(int rounds) {
 }
 
 void Market::sortAgentsByBudget() {
-    for (int i = 0; i < size - 1; ++i) {
-        for (int j = 0; j < size - i - 1; ++j) {
-            if (agents[j]->getBudget() < agents[j + 1]->getBudget()) {
-                swapAgents(j, j + 1);
-            }
-        }
-    }
+    std::sort(agents, agents + size, [](EconomicAgent* a, EconomicAgent* b) {
+        return a->getBudget() > b->getBudget();
+    });
 }
 
 void Market::printMarketState() const {
@@ -194,30 +186,21 @@ void Market::printMarketState() const {
     }
 }
 
-// Пример использования
 int main() {
     Market market;
     
-    // Добавляем 50 потребителей
     for (int i = 1; i <= 50; ++i) {
         market.addAgent(new Consumer("Consumer_" + std::to_string(i), 100 + rand() % 50));
     }
     
-    // Добавляем 5 компаний
     for (int i = 1; i <= 5; ++i) {
         market.addAgent(new Company("Company_" + std::to_string(i), 500 + rand() % 200));
     }
     
-    // Добавляем правительство
     market.addAgent(new Government("Gov", 1000));
     
-    // Симулируем 1000 рыночных взаимодействий
     market.simulateInteractions(1000);
-    
-    // Сортируем агентов по бюджету
     market.sortAgentsByBudget();
-    
-    // Выводим состояние рынка
     market.printMarketState();
     
     return 0;
