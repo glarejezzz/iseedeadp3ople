@@ -1,3 +1,6 @@
+#ifndef ECONOMIC_AGENTS_H
+#define ECONOMIC_AGENTS_H
+
 #include <string>
 
 class EconomicAgent {
@@ -53,3 +56,5 @@ public:
     void simulateInteractions(int interactions);
     void printTopWealth(int topN);
 };
+
+#endif // ECONOMIC_AGENTS_H
