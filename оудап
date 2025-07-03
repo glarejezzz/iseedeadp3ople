@@ -1,0 +1,252 @@
+#ifndef ECONOMIC_AGENTS_H
+#define ECONOMIC_AGENTS_H
+
+#include <string>
+
+class EconomicAgent {
+protected:
+    double budget;
+    std::string name;
+public:
+    EconomicAgent(double initialBudget, const std::string& agentName);
+    virtual ~EconomicAgent() {}
+    virtual void makeDecision() = 0;
+    virtual void updateBudget(double delta);
+    double getBudget() const;
+    const std::string& getName() const;
+    virtual std::string getType() const = 0;
+};
+
+class Consumer : public EconomicAgent {
+public:
+    Consumer(double initialBudget, const std::string& name);
+    void makeDecision() override;
+    std::string getType() const override;
+};
+
+class Company : public EconomicAgent {
+    double productionCost;
+public:
+    Company(double initialBudget, double cost, const std::string& name);
+    void makeDecision() override;
+    std::string getType() const override;
+    double getProductionCost() const;
+};
+
+class Government : public EconomicAgent {
+    double taxRate;
+    double subsidyRate;
+public:
+    Government(double initialBudget, double tax, double subsidy, const std::string& name);
+    void makeDecision() override;
+    void applyTaxesAndSubsidies(EconomicAgent** agents, int count);
+    std::string getType() const override;
+};
+
+class Market {
+    EconomicAgent** agents;
+    int agentCount;
+    int capacity;
+    
+    void sortAgentsByBudget();
+public:
+    Market(int maxCapacity);
+    ~Market();
+    void addAgent(EconomicAgent* agent);
+    void simulateInteractions(int interactions);
+    void printAllAgents();  // Изменено: теперь выводим всех агентов
+};
+
+#endif // ECONOMIC_AGENTS_H
+#include "economic_agents.h"
+#include <iostream>
+
+// EconomicAgent implementation
+EconomicAgent::EconomicAgent(double initialBudget, const std::string& agentName) 
+    : budget(initialBudget), name(agentName) {}
+
+void EconomicAgent::updateBudget(double delta) {
+    budget += delta;
+}
+
+double EconomicAgent::getBudget() const {
+    return budget;
+}
+
+const std::string& EconomicAgent::getName() const {
+    return name;
+}
+
+// Consumer implementation
+Consumer::Consumer(double initialBudget, const std::string& name) 
+    : EconomicAgent(initialBudget, name) {}
+
+void Consumer::makeDecision() {
+    if (budget > 5) {
+        updateBudget(-5);
+    }
+}
+
+std::string Consumer::getType() const {
+    return "Consumer";
+}
+
+// Company implementation
+Company::Company(double initialBudget, double cost, const std::string& name) 
+    : EconomicAgent(initialBudget, name), productionCost(cost) {}
+
+void Company::makeDecision() {
+    static int counter = 0;
+    double revenue = 8 + (counter++ % 5);
+    updateBudget(revenue - productionCost);
+}
+
+std::string Company::getType() const {
+    return "Company";
+}
+
+double Company::getProductionCost() const {
+    return productionCost;
+}
+
+// Government implementation
+Government::Government(double initialBudget, double tax, double subsidy, const std::string& name) 
+    : EconomicAgent(initialBudget, name), taxRate(tax), subsidyRate(subsidy) {}
+
+void Government::makeDecision() {}
+
+void Government::applyTaxesAndSubsidies(EconomicAgent** agents, int count) {
+    for (int i = 0; i < count; ++i) {
+        EconomicAgent* agent = agents[i];
+        if (agent == this) continue;
+        
+        if (agent->getBudget() > 0) {
+            double tax = agent->getBudget() * taxRate;
+            agent->updateBudget(-tax);
+            this->updateBudget(tax);
+        } else {
+            double subsidy = -agent->getBudget() * subsidyRate;
+            this->updateBudget(-subsidy);
+            agent->updateBudget(subsidy);
+        }
+    }
+}
+
+std::string Government::getType() const {
+    return "Government";
+}
+
+// Market implementation
+Market::Market(int maxCapacity) : capacity(maxCapacity), agentCount(0) {
+    agents = new EconomicAgent*[capacity];
+}
+
+Market::~Market() {
+    for (int i = 0; i < agentCount; ++i) {
+        delete agents[i];
+    }
+    delete[] agents;
+}
+
+void Market::addAgent(EconomicAgent* agent) {
+    if (agentCount < capacity) {
+        agents[agentCount++] = agent;
+    }
+}
+
+void Market::sortAgentsByBudget() {
+    for (int i = 0; i < agentCount-1; ++i) {
+        for (int j = 0; j < agentCount-i-1; ++j) {
+            if (agents[j]->getBudget() < agents[j+1]->getBudget()) {
+                EconomicAgent* temp = agents[j];
+                agents[j] = agents[j+1];
+                agents[j+1] = temp;
+            }
+        }
+    }
+}
+
+void Market::simulateInteractions(int interactions) {
+    for (int i = 0; i < interactions; ++i) {
+        int idx1 = i % agentCount;
+        int idx2 = (i + 1) % agentCount;
+        
+        agents[idx1]->makeDecision();
+        agents[idx2]->makeDecision();
+        
+        if (i % 10 == 0) {
+            for (int j = 0; j < agentCount; ++j) {
+                if (Government* gov = dynamic_cast<Government*>(agents[j])) {
+                    gov->applyTaxesAndSubsidies(agents, agentCount);
+                }
+            }
+        }
+    }
+}
+
+void Market::printAllAgents() {
+    // Сначала выводим правительство
+    std::cout << "=== Government ===\n";
+    for (int i = 0; i < agentCount; ++i) {
+        if (dynamic_cast<Government*>(agents[i])) {
+            std::cout << agents[i]->getName() << ": " << agents[i]->getBudget() << "\n";
+            break;
+        }
+    }
+
+    // Затем компании
+    std::cout << "\n=== Companies ===\n";
+    for (int i = 0; i < agentCount; ++i) {
+        if (Company* comp = dynamic_cast<Company*>(agents[i])) {
+            std::cout << comp->getName() << ": " << comp->getBudget() 
+                      << " (Production cost: " << comp->getProductionCost() << ")\n";
+        }
+    }
+
+    // Затем все потребители
+    std::cout << "\n=== Consumers ===\n";
+    for (int i = 0; i < agentCount; ++i) {
+        if (dynamic_cast<Consumer*>(agents[i])) {
+            std::cout << agents[i]->getName() << ": " << agents[i]->getBudget() << "\n";
+        }
+    }
+}
+#include "economic_agents.h"
+#include <iostream>
+
+std::string to_string(int value) {
+    char buffer[20];
+    sprintf(buffer, "%d", value);
+    return std::string(buffer);
+}
+
+int main() {
+    const int NUM_COMPANIES = 5;
+    const int NUM_CONSUMERS = 50;
+    
+    Market market(NUM_COMPANIES + NUM_CONSUMERS + 1);
+    
+    // Создаем правительство
+    Government* gov = new Government(1000, 0.1, 0.05, "Central Government");
+    market.addAgent(gov);
+    
+    // Создаем 5 компаний
+    for (int i = 0; i < NUM_COMPANIES; ++i) {
+        std::string name = "Company " + to_string(i+1);
+        market.addAgent(new Company(100 + i*20, 5 + i, name));
+    }
+    
+    // Создаем 50 потребителей
+    for (int i = 0; i < NUM_CONSUMERS; ++i) {
+        std::string name = "Consumer " + to_string(i+1);
+        market.addAgent(new Consumer(50 + (i % 30), name));
+    }
+    
+    // Симулируем 100 рыночных взаимодействий
+    market.simulateInteractions(100);
+    
+    // Выводим полный список всех агентов
+    market.printAllAgents();
+    
+    return 0;
+}
