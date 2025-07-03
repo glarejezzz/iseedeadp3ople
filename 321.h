@@ -1,6 +1,3 @@
-#ifndef MARKET_H
-#define MARKET_H
-
 #include <iostream>
 #include <string>
 
@@ -10,37 +7,36 @@ protected:
     double budget;
 public:
     EconomicAgent(const std::string& n, double b);
-    virtual ~EconomicAgent();
-
+    virtual ~EconomicAgent() = default;  // Изменено на default
+    
     virtual void makeDecision() = 0;
     virtual void updateBudget(double delta);
     virtual void printInfo() const;
 
     double getBudget() const;
-    std::string getName() const;
+    const std::string& getName() const;
 };
 
 class Consumer : public EconomicAgent {
-private:
     double satisfaction;
 public:
     Consumer(const std::string& n, double b);
     void makeDecision() override;
     void printInfo() const override;
+    ~Consumer() override = default;  // Явное объявление
 };
 
 class Company : public EconomicAgent {
-private:
     double productionCost;
     double profitMargin;
 public:
     Company(const std::string& n, double b);
     void makeDecision() override;
     void printInfo() const override;
+    ~Company() override = default;  // Явное объявление
 };
 
 class Government : public EconomicAgent {
-private:
     double taxRate;
     double subsidyRate;
 public:
@@ -49,10 +45,10 @@ public:
     void applyTax(EconomicAgent* agent);
     void applySubsidy(EconomicAgent* agent);
     void printInfo() const override;
+    ~Government() override = default;  // Явное объявление
 };
 
 class Market {
-private:
     EconomicAgent** agents;
     int capacity;
     int size;
@@ -69,5 +65,4 @@ public:
     void sortAgentsByBudget();
     void printMarketState() const;
 };
-
 
