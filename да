@@ -1,0 +1,32 @@
+void Market::printAllAgents() {
+    std::cout << "=== Полный список агентов ===\n";
+    std::cout << "Правительство:\n";
+    
+    // Сначала выводим правительство
+    for (int i = 0; i < agentCount; ++i) {
+        if (dynamic_cast<Government*>(agents[i])) {
+            std::cout << agents[i]->getType() << " " << agents[i]->getName() 
+                      << ": " << agents[i]->getBudget() << "\n";
+            break;
+        }
+    }
+    
+    std::cout << "\nКомпании:\n";
+    // Затем компании
+    for (int i = 0; i < agentCount; ++i) {
+        if (dynamic_cast<Company*>(agents[i])) {
+            std::cout << agents[i]->getType() << " " << agents[i]->getName() 
+                      << ": " << agents[i]->getBudget() 
+                      << " (Издержки: " << ((Company*)agents[i])->getProductionCost() << ")\n";
+        }
+    }
+    
+    std::cout << "\nПотребители:\n";
+    // Затем все потребители
+    for (int i = 0; i < agentCount; ++i) {
+        if (dynamic_cast<Consumer*>(agents[i])) {
+            std::cout << agents[i]->getType() << " " << agents[i]->getName() 
+                      << ": " << agents[i]->getBudget() << "\n";
+        }
+    }
+}
