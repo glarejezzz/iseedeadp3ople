@@ -1,4 +1,12 @@
 #include "economic_agents.h"
+#include <iostream>
+
+std::string to_string(int value) {
+    // Простая реализация to_string, так как мы не можем использовать <string>
+    char buffer[20];
+    sprintf(buffer, "%d", value);
+    return std::string(buffer);
+}
 
 int main() {
     Market market(56); // 5 компаний + 50 потребителей + 1 правительство
@@ -9,14 +17,14 @@ int main() {
     
     // Создаем компании
     for (int i = 0; i < 5; ++i) {
-        std::string name = "Company " + std::to_string(i+1);
+        std::string name = "Company " + to_string(i+1);
         market.addAgent(new Company(100 + i*20, 5 + i, name));
     }
     
     // Создаем потребителей
     for (int i = 0; i < 50; ++i) {
-        std::string name = "Consumer " + std::to_string(i+1);
-        market.addAgent(new Consumer(50 + (i % 30), name)); // Бюджет 50-79
+        std::string name = "Consumer " + to_string(i+1);
+        market.addAgent(new Consumer(50 + (i % 30), name));
     }
     
     // Симулируем рыночные взаимодействия
