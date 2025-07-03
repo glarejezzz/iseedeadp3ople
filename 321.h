@@ -1,68 +1,55 @@
-#include <iostream>
 #include <string>
 
 class EconomicAgent {
 protected:
-    std::string name;
     double budget;
+    std::string name;
 public:
-    EconomicAgent(const std::string& n, double b);
-    virtual ~EconomicAgent() = default;  // Изменено на default
-    
+    EconomicAgent(double initialBudget, const std::string& agentName);
+    virtual ~EconomicAgent() {}
     virtual void makeDecision() = 0;
     virtual void updateBudget(double delta);
-    virtual void printInfo() const;
-
     double getBudget() const;
     const std::string& getName() const;
+    virtual std::string getType() const = 0;
 };
 
 class Consumer : public EconomicAgent {
-    double satisfaction;
 public:
-    Consumer(const std::string& n, double b);
+    Consumer(double initialBudget, const std::string& name);
     void makeDecision() override;
-    void printInfo() const override;
-    ~Consumer() override = default;  // Явное объявление
+    std::string getType() const override;
 };
 
 class Company : public EconomicAgent {
     double productionCost;
-    double profitMargin;
 public:
-    Company(const std::string& n, double b);
+    Company(double initialBudget, double cost, const std::string& name);
     void makeDecision() override;
-    void printInfo() const override;
-    ~Company() override = default;  // Явное объявление
+    std::string getType() const override;
+    double getProductionCost() const;
 };
 
 class Government : public EconomicAgent {
     double taxRate;
     double subsidyRate;
 public:
-    Government(const std::string& n, double b);
+    Government(double initialBudget, double tax, double subsidy, const std::string& name);
     void makeDecision() override;
-    void applyTax(EconomicAgent* agent);
-    void applySubsidy(EconomicAgent* agent);
-    void printInfo() const override;
-    ~Government() override = default;  // Явное объявление
+    void applyTaxesAndSubsidies(EconomicAgent** agents, int count);
+    std::string getType() const override;
 };
 
 class Market {
     EconomicAgent** agents;
+    int agentCount;
     int capacity;
-    int size;
-    Government* government;
-
-    void expandCapacity();
-    void swapAgents(int i, int j);
-public:
-    Market(int initialCapacity = 10);
-    ~Market();
-
-    void addAgent(EconomicAgent* agent);
-    void simulateInteractions(int rounds);
+    
     void sortAgentsByBudget();
-    void printMarketState() const;
+public:
+    Market(int maxCapacity);
+    ~Market();
+    void addAgent(EconomicAgent* agent);
+    void simulateInteractions(int interactions);
+    void printTopWealth(int topN);
 };
-
