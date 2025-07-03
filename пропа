@@ -1,0 +1,25 @@
+int main() {
+    const int NUM_COMPANIES = 5;
+    const int NUM_CONSUMERS = 50;
+    
+    Market market(NUM_COMPANIES + NUM_CONSUMERS + 1);
+    
+    // Создание агентов (без изменений)
+    Government* gov = new Government(1000, 0.1, 0.05, "Central Gov");
+    market.addAgent(gov);
+    
+    for (int i = 0; i < NUM_COMPANIES; ++i) {
+        std::string name = "Company " + to_string(i+1);
+        market.addAgent(new Company(100 + i*20, 5 + i, name));
+    }
+    
+    for (int i = 0; i < NUM_CONSUMERS; ++i) {
+        std::string name = "Consumer " + to_string(i+1);
+        market.addAgent(new Consumer(50 + (i % 30), name));
+    }
+    
+    market.simulateInteractions(100);
+    market.printAllAgents();  // Заменяем printTopWealth(10) на printAllAgents()
+    
+    return 0;
+}
