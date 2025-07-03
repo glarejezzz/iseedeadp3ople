@@ -23,7 +23,7 @@ Consumer::Consumer(double initialBudget, const std::string& name)
 
 void Consumer::makeDecision() {
     if (budget > 5) {
-        updateBudget(-5); // Потребитель тратит 5 единиц
+        updateBudget(-5);
     }
 }
 
@@ -36,9 +36,8 @@ Company::Company(double initialBudget, double cost, const std::string& name)
     : EconomicAgent(initialBudget, name), productionCost(cost) {}
 
 void Company::makeDecision() {
-    // Простая реализация без rand() (так как cstdlib нельзя)
     static int counter = 0;
-    double revenue = 8 + (counter++ % 5); // Выручка 8-12
+    double revenue = 8 + (counter++ % 5);
     updateBudget(revenue - productionCost);
 }
 
@@ -98,7 +97,6 @@ void Market::addAgent(EconomicAgent* agent) {
 }
 
 void Market::sortAgentsByBudget() {
-    // Пузырьковая сортировка
     for (int i = 0; i < agentCount-1; ++i) {
         for (int j = 0; j < agentCount-i-1; ++j) {
             if (agents[j]->getBudget() < agents[j+1]->getBudget()) {
@@ -112,7 +110,6 @@ void Market::sortAgentsByBudget() {
 
 void Market::simulateInteractions(int interactions) {
     for (int i = 0; i < interactions; ++i) {
-        // Простейшая реализация без случайных чисел
         int idx1 = i % agentCount;
         int idx2 = (i + 1) % agentCount;
         
@@ -121,8 +118,8 @@ void Market::simulateInteractions(int interactions) {
         
         if (i % 10 == 0) {
             for (int j = 0; j < agentCount; ++j) {
-                if (dynamic_cast<Government*>(agents[j])) {
-                    ((Government*)agents[j])->applyTaxesAndSubsidies(agents, agentCount);
+                if (Government* gov = dynamic_cast<Government*>(agents[j])) {
+                    gov->applyTaxesAndSubsidies(agents, agentCount);
                 }
             }
         }
