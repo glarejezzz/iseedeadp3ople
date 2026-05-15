@@ -1,0 +1,237 @@
+#include "SocketWrapper.h"
+#include <iostream>
+#include <string>
+#include <iomanip>
+
+void print_table_header() {
+    std::cout << "\n+----------------------+----------+--------+\n";
+    std::cout << "| Process              | PID      | CPU%    |\n";
+    std::cout << "+----------------------+----------+--------+\n";
+}
+
+void print_table_row(const std::string& process_name, const std::string& pid, const std::string& cpu) {
+    std::cout << "| " << std::left << std::setw(20) << process_name
+              << "| " << std::setw(8) << pid
+              << "| " << std::setw(6) << cpu << " |\n";
+    std::cout << "+----------------------+----------+--------+\n";
+}
+
+void Client::run(std::string& ip_address, int port) {
+    try {
+        WSAInitializer wsa;
+        ClientSocket client;
+        client.connect(ip_address, port);
+
+        std::cout << "[Client] Connected to Process Monitor Server at " << ip_address << ":" << port << std::endl;
+        std::cout << "Commands: STATUS <process_name>.exe" << std::endl;
+        std::cout << "Example: STATUS notepad.exe" << std::endl;
+        std::cout << "Type 'QUIT' to exit\n";
+
+        while (true) {
+            std::cout << "> ";
+            std::string command;
+            std::getline(std::cin, command);
+
+            if (command.empty()) continue;
+
+            if (command == "QUIT" || command == "quit") {
+                client.send("QUIT\n");
+                std::cout << "[Client] Disconnecting..." << std::endl;
+                break;
+            }
+
+            client.send(command + "\n");
+            std::string response = client.receive(4096);
+
+            if (response.find("RUNNING") != std::string::npos) {
+                size_t pid_pos = response.find("PID:");
+                size_t cpu_pos = response.find("CPU:");
+
+                if (pid_pos != std::string::npos && cpu_pos != std::string::npos) {
+                    size_t pid_end = response.find(" ", pid_pos);
+                    if (pid_end == std::string::npos) pid_end = response.find("\n", pid_pos);
+
+                    size_t cpu_end = response.find("%", cpu_pos);
+                    if (cpu_end == std::string::npos) cpu_end = response.find("\n", cpu_pos);
+
+                    std::string pid_str = response.substr(pid_pos + 4, pid_end - (pid_pos + 4));
+                    std::string cpu_str = response.substr(cpu_pos + 4, cpu_end - (cpu_pos + 4));
+
+                    std::string process_name = command;
+                    if (process_name.find("STATUS ") == 0) {
+                        process_name = process_name.substr(7);
+                    }
+
+                    print_table_header();
+                    print_table_row(process_name, pid_str, cpu_str);
+                } else {
+                    std::cout << response;
+                }
+            } else if (response == "NOT_RUNNING\n") {
+                std::cout << "[MISS] Process not found in system" << std::endl;
+            } else if (response.find("ERROR:") != std::string::npos) {
+                std::cerr << response;
+            } else {
+                std::cout << response;
+            }
+        }
+    } catch (const NetworkException& e) {
+        std::cerr << "[Client] Error: " << e.what() << std::endl;
+    }
+
+#include "SocketWrapper.h"
+#include <iostream>
+#include <string>
+
+void Client::run(std::string& ip_address, int port) {
+    try {
+        WSAInitializer wsa;
+        ClientSocket client;
+        client.connect(ip_address, port);
+
+        std::cout << "[Client] Connected to KV-Store server at " << ip_address << ":" << port << std::endl;
+        std::cout << "Commands: SET <key> <value>, GET <key>, DEL <key>, QUIT" << std::endl;
+
+        while (true) {
+            std::cout << "> ";
+            std::string command;
+            std::getline(std::cin, command);
+
+            if (command.empty()) continue;
+
+            client.send(command + "\n");
+            std::string response = client.receive(4096);
+
+            if (response == "NOT_FOUND\n") {
+                std::cout << "[MISS] " << response;
+            } else if (response == "QUIT\n") {
+                std::cout << "[Client] Disconnecting..." << std::endl;
+                break;
+            } else {
+                std::cout << response;
+            }
+        }
+    } catch (const NetworkException& e) {
+        std::cerr << "[Client] Error: " << e.what() << std::endl;
+    }
+}
+
+}
+#include "SocketWrapper.h"
+#include <iostream>
+#include <string>
+#include <thread>
+#include <atomic>
+#include <chrono>
+
+static std::atomic<bool> chat_running{true};
+
+void chat_receive_messages(ClientSocket& client) {
+    while (chat_running) {
+        try {
+            std::string message = client.receive(4096);
+            if (message.empty()) {
+                std::cout << "\n[SYSTEM] Disconnected from server" << std::endl;
+                chat_running = false;
+                break;
+            }
+
+            while (!message.empty() && (message.back() == '\n' || message.back() == '\r')) {
+                message.pop_back();
+            }
+
+            if (message == "PING") {
+                client.send("PONG\n");
+            } else if (message.find("[SYSTEM]") == 0) {
+                std::cout << "\033[33m" << message << "\033[0m" << std::endl;
+            } else {
+                std::cout << "\033[36m>> " << message << "\033[0m" << std::endl;
+            }
+
+            std::cout << "> ";
+            std::cout.flush();
+        } catch (const NetworkException& e) {
+            std::cout << "\n[ERROR] Connection lost: " << e.what() << std::endl;
+            chat_running = false;
+            break;
+        }
+    }
+}
+
+void Client::run(std::string& ip_address, int port) {
+    try {
+        WSAInitializer wsa;
+        ClientSocket client;
+        client.connect(ip_address, port);
+
+        std::cout << "[Client] Connected to Broadcast Chat Server at " << ip_address << ":" << port << std::endl;
+
+        std::string nickname;
+        std::cout << "Enter your nickname: ";
+        std::getline(std::cin, nickname);
+
+        if (nickname.empty()) {
+            std::cerr << "[ERROR] Nickname cannot be empty" << std::endl;
+            return;
+        }
+
+        client.send("NICK " + nickname + "\n");
+
+        std::string response = client.receive(4096);
+        while (!response.empty() && (response.back() == '\n' || response.back() == '\r')) {
+            response.pop_back();
+        }
+
+        if (response == "WELCOME") {
+            std::cout << "\033[32m[SUCCESS] Connected to chat as '" << nickname << "'\033[0m" << std::endl;
+            std::cout << "Type your messages and press Enter to send" << std::endl;
+            std::cout << "Type '/quit' to exit" << std::endl;
+            std::cout << "----------------------------------------" << std::endl;
+        } else if (response.find("ERROR: nickname_taken") == 0) {
+            std::cerr << "\033[31m[ERROR] Nickname already taken. Please restart with different nickname.\033[0m" << std::endl;
+            return;
+        } else {
+            std::cerr << "\033[31m[ERROR] " << response << "\033[0m" << std::endl;
+            return;
+        }
+
+        std::thread receiver(chat_receive_messages, std::ref(client));
+
+        while (chat_running) {
+            std::cout << "> ";
+            std::string message;
+            std::getline(std::cin, message);
+
+            if (!chat_running) break;
+
+            if (message == "/quit") {
+                chat_running = false;
+                break;
+            }
+
+            if (message.empty()) continue;
+
+            try {
+                client.send(message + "\n");
+            } catch (const NetworkException& e) {
+                std::cerr << "\n[ERROR] Failed to send message: " << e.what() << std::endl;
+                chat_running = false;
+                break;
+            }
+        }
+
+        try {
+            client.close();
+        } catch (...) {}
+
+        if (receiver.joinable()) {
+            receiver.join();
+        }
+
+        std::cout << "[Client] Disconnected" << std::endl;
+
+    } catch (const NetworkException& e) {
+        std::cerr << "[Client] Error: " << e.what() << std::endl;
+    }
+}
+
