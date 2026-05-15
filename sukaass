@@ -1,0 +1,67 @@
+#include "SocketWrapper.h"
+#include <iostream>
+#include <string>
+
+int main() {
+    std::string HOST;
+    int PORT;
+    
+    std::cout << "=== Client ===" << std::endl;
+    std::cout << "Enter server IP address (default 127.0.0.1): ";
+    std::getline(std::cin, HOST);
+    if (HOST.empty()) {
+        HOST = "127.0.0.1";
+    }
+    
+    std::cout << "Enter server port (default 12345): ";
+    std::string port_str;
+    std::getline(std::cin, port_str);
+    if (port_str.empty()) {
+        PORT = 12345;
+    } else {
+        PORT = std::stoi(port_str);
+    }
+    
+    std::cout << "Connecting to " << HOST << ":" << PORT << "..." << std::endl;
+    
+    Client client;
+    client.run(HOST, PORT);  // HOST - это lvalue (std::string)
+    
+    return 0; 
+
+
+    
+#include "SocketWrapper.h"
+#include <iostream>
+#include <string>
+
+int main() {
+    std::string HOST;
+    int PORT;
+    
+    std::cout << "=== Chat Client ===" << std::endl;
+    std::cout << "Enter server IP address (default 127.0.0.1): ";
+    std::getline(std::cin, HOST);
+    if (HOST.empty()) {
+        HOST = "127.0.0.1";
+    }
+    
+    std::cout << "Enter server port (default 12345): ";
+    std::string port_str;
+    std::getline(std::cin, port_str);
+    if (port_str.empty()) {
+        PORT = 12345;
+    } else {
+        PORT = std::stoi(port_str);
+    }
+    
+    std::cout << "Connecting to " << HOST << ":" << PORT << "..." << std::endl;
+    
+    Client client;
+    client.run(HOST, PORT);
+    
+    return 0;
+}
+
+
+}
