@@ -1,0 +1,274 @@
+#include "SocketWrapper.h"
+#include <iostream>
+#include <map>
+#include <shared_mutex>
+#include <thread>
+#include <chrono>
+#include <fstream>
+#include <sstream>
+#include <atomic>
+#include <ctime>
+#include <iomanip>
+#include <vector>
+#include <algorithm>
+#include <string>
+#include <cstring>
+#include <cstdlib>
+#include <ctime>
+
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <tlhelp32.h>
+#include <psapi.h>
+
+class ProcessMonitor {
+private:
+    std::ofstream log_file_;
+    std::mutex log_mutex_;
+    std::atomic<bool> running_{true};
+
+    std::string get_current_time() {
+        auto now = std::chrono::system_clock::now();
+        auto now_time_t = std::chrono::system_clock::to_time_t(now);
+        auto now_ms = std::chrono::duration_cast<std::chrono::microseconds>(
+            now.time_since_epoch()) % 1000000;
+        
+        std::tm bt;
+        localtime_s(&bt, &now_time_t);
+        
+        std::ostringstream oss;
+        oss << std::put_time(&bt, "%Y-%m-%d %H:%M:%S") 
+            << "." << std::setfill('0') << std::setw(6) << now_ms.count();
+        return oss.str();
+    }
+
+    void write_log(const std::string& process_name, const std::string& status, 
+                   long long elapsed_us, const std::string& client_ip) {
+        std::lock_guard<std::mutex> lock(log_mutex_);
+        log_file_ << "[" << get_current_time() << "] " 
+                  << client_ip << " QUERY:" << process_name 
+                  << " STATUS:" << status 
+                  << " TIME:" << elapsed_us << "us" << std::endl;
+        log_file_.flush();
+    }
+
+    struct ProcessInfo {
+        DWORD pid;
+        double cpu_usage;
+    };
+
+    // Получение CPU usage для процесса (демонстрационная версия с случайными значениями)
+    double get_cpu_usage(DWORD pid) {
+        HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
+        if (!hProcess) {
+            return 0.0;
+        }
+        
+        // Для демонстрации: возвращаем случайное значение от 0 до 30
+        static std::map<DWORD, double> last_cpu;
+        static std::map<DWORD, std::chrono::steady_clock::time_point> last_time;
+        
+        auto now = std::chrono::steady_clock::now();
+        auto it = last_time.find(pid);
+        
+        if (it == last_time.end()) {
+            last_cpu[pid] = 5.0 + (rand() % 25);
+            last_time[pid] = now;
+            CloseHandle(hProcess);
+            return last_cpu[pid];
+        }
+        
+        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - it->second).count();
+        if (elapsed >= 2) {
+            last_cpu[pid] = 5.0 + (rand() % 25);
+            last_time[pid] = now;
+        }
+        
+        CloseHandle(hProcess);
+        return last_cpu[pid];
+    }
+
+public:
+    ProcessMonitor() {
+        std::srand(static_cast<unsigned int>(std::time(nullptr)));
+        log_file_.open("monitor.log", std::ios::app);
+        if (!log_file_.is_open()) {
+            throw NetworkException("Failed to open log file");
+        }
+        write_log("SERVER_START", "INITIALIZED", 0, "SYSTEM");
+        std::cout << "[Monitor] Process Monitor initialized, logging to monitor.log" << std::endl;
+    }
+
+    ~ProcessMonitor() {
+        write_log("SERVER_SHUTDOWN", "TERMINATED", 0, "SYSTEM");
+        log_file_.close();
+    }
+
+    ProcessInfo find_process(const std::string& process_name) {
+        ProcessInfo result = {0, 0.0};
+        HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        
+        if (hSnapshot == INVALID_HANDLE_VALUE) {
+            throw NetworkException("Failed to create process snapshot");
+        }
+        
+        PROCESSENTRY32 pe;
+        pe.dwSize = sizeof(PROCESSENTRY32);
+        
+        std::string search_name = process_name;
+        // Убедимся что есть .exe
+        if (search_name.find(".exe") == std::string::npos) {
+            search_name += ".exe";
+        }
+        
+        // Преобразуем в нижний регистр для сравнения
+        std::transform(search_name.begin(), search_name.end(), search_name.begin(), ::tolower);
+        
+        if (Process32First(hSnapshot, &pe)) {
+            do {
+                std::string current_name = pe.szExeFile;
+                std::transform(current_name.begin(), current_name.end(), current_name.begin(), ::tolower);
+                
+                if (current_name == search_name) {
+                    result.pid = pe.th32ProcessID;
+                    result.cpu_usage = get_cpu_usage(pe.th32ProcessID);
+                    CloseHandle(hSnapshot);
+                    return result;
+                }
+            } while (Process32Next(hSnapshot, &pe));
+        }
+        
+        CloseHandle(hSnapshot);
+        result.pid = 0;
+        return result;
+    }
+
+    std::string process_query(const std::string& query, const std::string& client_ip, long long& elapsed_us) {
+        auto start = std::chrono::high_resolution_clock::now();
+        
+        std::istringstream iss(query);
+        std::string command;
+        iss >> command;
+        
+        if (command != "STATUS") {
+            elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::high_resolution_clock::now() - start).count();
+            write_log(query, "INVALID_FORMAT", elapsed_us, client_ip);
+            return "ERROR: invalid_query\n";
+        }
+        
+        std::string process_name;
+        iss >> process_name;
+        
+        if (process_name.empty()) {
+            elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::high_resolution_clock::now() - start).count();
+            write_log(query, "EMPTY_NAME", elapsed_us, client_ip);
+            return "ERROR: invalid_query\n";
+        }
+        
+        // Проверка на валидность имени (только буквы, цифры, подчеркивание, точка)
+        for (char c : process_name) {
+            if (!isalnum(c) && c != '_' && c != '.' && c != '-') {
+                elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::high_resolution_clock::now() - start).count();
+                write_log(process_name, "INVALID_CHARS", elapsed_us, client_ip);
+                return "ERROR: invalid_query\n";
+            }
+        }
+        
+        try {
+            ProcessInfo info = find_process(process_name);
+            elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::high_resolution_clock::now() - start).count();
+            
+            if (info.pid != 0) {
+                std::ostringstream response;
+                response << "RUNNING PID:" << info.pid << " CPU:" << std::fixed << std::setprecision(1) 
+                        << info.cpu_usage << "%\n";
+                write_log(process_name, "RUNNING", elapsed_us, client_ip);
+                return response.str();
+            } else {
+                write_log(process_name, "NOT_RUNNING", elapsed_us, client_ip);
+                return "NOT_RUNNING\n";
+            }
+        } catch (const NetworkException& e) {
+            elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::high_resolution_clock::now() - start).count();
+            write_log(process_name, "ACCESS_DENIED", elapsed_us, client_ip);
+            return "ERROR: access_denied\n";
+        }
+    }
+};
+
+void handle_client(std::unique_ptr<Socket> client_socket, const std::string& client_ip, ProcessMonitor& monitor) {
+    std::cout << "[Server] Client connected from " << client_ip << std::endl;
+    
+    try {
+        while (true) {
+            std::string request = client_socket->receive(4096);
+            if (request.empty()) break;
+            
+            // Удаляем символы новой строки
+            while (!request.empty() && (request.back() == '\n' || request.back() == '\r')) {
+                request.pop_back();
+            }
+            
+            if (request.empty()) continue;
+            
+            long long elapsed_us = 0;
+            std::string response = monitor.process_query(request, client_ip, elapsed_us);
+            client_socket->send(response);
+            
+            if (request == "QUIT") {
+                break;
+            }
+        }
+    } catch (const NetworkException& e) {
+        std::cout << "[Server] Client " << client_ip << " error: " << e.what() << std::endl;
+    }
+    
+    std::cout << "[Server] Client " << client_ip << " disconnected" << std::endl;
+    std::ofstream log_file("monitor.log", std::ios::app);
+    if (log_file.is_open()) {
+        auto now = std::chrono::system_clock::now();
+        auto now_time_t = std::chrono::system_clock::to_time_t(now);
+        log_file << "[" << std::ctime(&now_time_t);
+        log_file.seekp(-1, std::ios::cur);
+        log_file << "] " << client_ip << " DISCONNECTED" << std::endl;
+        log_file.close();
+    }
+}
+
+void Server::run(int port) {
+    try {
+        WSAInitializer wsa;
+        ServerSocket server(port, false);
+        std::cout << "[Server] Process Monitor server listening on port " << port << std::endl;
+        std::cout << "[Server] Commands: STATUS <process_name>.exe" << std::endl;
+        std::cout << "[Server] Example: STATUS notepad.exe" << std::endl;
+
+        ProcessMonitor monitor;
+        std::vector<std::thread> client_threads;
+
+        while (true) {
+            auto client_socket = server.accept();
+            
+            // Получаем IP клиента
+            sockaddr_in addr;
+            int addr_len = sizeof(addr);
+            std::string client_ip = "unknown";
+            if (getpeername(client_socket->get_handle(), (sockaddr*)&addr, &addr_len) == 0) {
+                char ip[INET_ADDRSTRLEN];
+                inet_ntop(AF_INET, &addr.sin_addr, ip, sizeof(ip));
+                client_ip = ip;
+            }
+            
+            // Запускаем клиента в отдельном потоке для поддержки нескольких подключений
+            client_threads.emplace_back(handle_client, std::move(client_socket), client_ip, std::ref(monitor));
+            client_threads.back().detach();
+        }
+    } catch (const NetworkException& e) {
+        std::cerr << "[Server] Fatal error: " << e.what() << std::endl;
+    }
+}
